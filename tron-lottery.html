@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Tron Lottery Game - Mobile</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; padding:0; background: #f4f4f4; }
+    h2 { text-align:center; color: #333; padding: 10px 0; }
+    .topbar {
+      position: sticky; top:0; background:#e7f3fe; border-left:5px solid #2196F3; padding:10px;
+      font-size:16px; z-index:100;
+    }
+    button { margin:5px 0; padding:12px; width:100%; font-size:16px; cursor:pointer; border:none; border-radius:5px; background:#2196F3; color:white; }
+    button:disabled { background:#ccc; cursor:not-allowed; }
+    #output { margin:10px; background:#fff; padding:10px; border:1px solid #ccc; max-height:calc(100vh - 180px); overflow-y:auto; }
+    table { border-collapse: collapse; width:100%; min-width: 400px; }
+    th, td { border:1px solid #ccc; padding:8px; text-align:left; font-size:14px; word-break: break-all; }
+    th { background:#eee; }
+  </style>
+</head>
+<body>
+  <h2>🎲 Tron Lottery Game</h2>
+  <div class="topbar" id="roundInfo">当前轮数：- &nbsp;&nbsp; 当前奖池：- USDT</div>
+
+  <div style="padding:0 10px;">
+    <button id="buyBtn" onclick="buyTicket()">买票 (10 USDT)</button>
+    <button onclick="withdrawReward()">提现奖金</button>
+    <button onclick="refreshAll()">刷新玩家和历史开奖</button>
+  </div>
+
+  <div id="output"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
+  <script>
+    const CONTRACT_ADDRESS = "TMjrX4nZj1aeGnzaCwJiSFJxpKWMuwG1FZ";
+    const TICKET_PRICE = 10;
+
+    if(!window.tronWeb || !window.tronWeb.ready){
+      document.getElementById('output').innerText = "请安装 TronLink 并登录钱包";
+    }
+
+    function shortenAddress(addr){
+      return addr.slice(0,6)+'…'+addr.slice(-4);
+    }
+
+    async function getContract(){ return await tronWeb.contract().at(CONTRACT_ADDRESS); }
+
+    async function buyTicket(){
+      try{
+        const contract = await getContract();
+        const tx = await contract.buyTicket().send();
+        document.getElementById("output").innerText = "买票成功！\n交易ID: " + tx;
+        await refreshAll();
+      }catch(err){
+        document.getElementById("output").innerText = "买票失败:\n" + err;
+      }
+    }
+
+    async function withdrawReward(){
+      try{
+        const contract = await getContract();
+        const tx = await contract.withdrawReward().send();
+        document.getElementById("output").innerText = "提现成功！\n交易ID: " + tx;
+        await refreshAll();
+      }catch(err){
+        document.getElementById("output").innerText = "提现失败:\n" + err;
+      }
+    }
+
+    async function refreshAll(){
+      try{
+        const contract = await getContract();
+        const players = await contract.getPlayers().call();
+        const round = await contract.round().call();
+
+        let totalCollected = players.length * TICKET_PRICE;
+        let totalRewards = 0;
+        for(let i=0;i<players.length;i++){
+          const reward = await contract.rewards(players[i]).call();
+          totalRewards += parseInt(reward)/1e6;
+        }
+        const remainingPool = totalCollected - totalRewards;
+
+        document.getElementById("roundInfo").innerHTML = `当前轮数：${round} &nbsp;&nbsp; 当前奖池：${remainingPool} USDT`;
+
+        const buyBtn = document.getElementById("buyBtn");
+        if(players.length >= 10){ buyBtn.disabled = true; buyBtn.innerText = "人数已满"; }
+        else { buyBtn.disabled=false; buyBtn.innerText="买票 (10 USDT)"; }
+
+        let html="<h3>当前参与玩家和奖金</h3>";
+        if(players.length===0){ html+="<p>暂无玩家</p>"; }
+        else{
+          html+="<div style='overflow-x:auto'><table><tr><th>玩家</th><th>奖金(USDT)</th></tr>";
+          for(let i=0;i<players.length;i++){
+            const reward = await contract.rewards(players[i]).call();
+            html+=`<tr><td>${shortenAddress(players[i])}</td><td>${reward/1e6}</td></tr>`;
+          }
+          html+="</table></div>";
+        }
+
+        html+="<h3>历史开奖记录</h3>";
+        const history = await contract.getHistory().call();
+        if(history.length===0){ html+="<p>暂无历史开奖</p>"; }
+        else{
+          for(let i=0;i<history.length;i++){
+            html+=`<p>第${history[i].round}轮中奖玩家和金额:</p>`;
+            html+="<div style='overflow-x:auto'><table><tr><th>玩家</th><th>金额(USDT)</th></tr>";
+            for(let j=0;j<history[i].winners.length;j++){
+              html+=`<tr><td>${shortenAddress(history[i].winners[j])}</td><td>${history[i].amounts[j]/1e6}</td></tr>`;
+            }
+            html+="</table></div>";
+          }
+        }
+
+        document.getElementById("output").innerHTML = html;
+
+      }catch(err){
+        document.getElementById("output").innerText = "刷新失败:\n"+err;
+      }
+    }
+
+    setInterval(refreshAll,15000);
+    refreshAll();
+  </script>
+</body>
+</html>
