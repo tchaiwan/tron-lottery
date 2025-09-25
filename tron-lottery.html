@@ -39,7 +39,7 @@
     const TICKET_PRICE = 10;
     const MAX_PLAYERS = 10;
 
-    let currentRound = 1; // 前端轮数计数，可根据实际情况改为合约读取
+    let currentRound = 1; // 前端轮数计数
 
     if(!window.tronWeb || !window.tronWeb.ready){
       document.getElementById('output').innerText = "请安装 TronLink 并登录钱包";
@@ -59,8 +59,28 @@
         const tx = await contract.enter().send();
         alert("买票成功！交易ID:\n" + tx);
         await refreshAll();
-      }catch(err){
-        alert("买票失败:\n" + err);
+      } catch(err){
+        console.error(err);
+        // 提取错误信息
+        let message = "买票失败，原因未知";
+        if(err && err.data && err.data.message){
+          message = err.data.message;
+        } else if(err && err.message){
+          message = err.message;
+        } else if(err && err.constructor===String){
+          message = err;
+        }
+
+        // 判断常见错误
+        if(message.includes("Already entered")){
+          message = "买票失败：你本轮已购买过票";
+        } else if(message.includes("Lottery is full")){
+          message = "买票失败：本轮人数已满，请等待下一轮";
+        } else if(message.includes("transferFrom")){
+          message = "买票失败：USDT余额不足或未授权合约";
+        }
+
+        alert(message);
       }
     }
 
@@ -71,7 +91,8 @@
         alert("提现成功！交易ID:\n" + tx);
         await refreshAll();
       }catch(err){
-        alert("提现失败:\n" + err);
+        console.error(err);
+        alert("提现失败，请查看控制台错误信息");
       }
     }
 
@@ -83,11 +104,9 @@
         const totalCollected = players.length * TICKET_PRICE;
         const remainingTickets = MAX_PLAYERS - players.length;
 
-        // 更新顶部状态栏
         document.getElementById("roundInfo").innerHTML = 
           `轮数：${currentRound} &nbsp;&nbsp; 当前玩家数：${players.length} / ${MAX_PLAYERS} &nbsp;&nbsp; 剩余票数：${remainingTickets} &nbsp;&nbsp; 奖池金额：${totalCollected} USDT`;
 
-        // 控制买票按钮
         const buyBtn = document.getElementById("buyBtn");
         if(players.length >= MAX_PLAYERS){ 
           buyBtn.disabled = true; 
@@ -97,7 +116,6 @@
           buyBtn.innerText = `买票 (剩余 ${remainingTickets} 张)`; 
         }
 
-        // 当前玩家和奖金显示
         let html="<h3>当前参与玩家和奖金</h3>";
         if(players.length===0){ html+="<p>暂无玩家</p>"; }
         else{
@@ -108,26 +126,24 @@
           }
           html+="</table></div>";
         }
-
         document.getElementById("output").innerHTML = html;
 
-        // 如果本轮人数满，轮数+1（可根据合约重置判断）
         if(players.length >= MAX_PLAYERS){
           currentRound++;
         }
 
       }catch(err){
+        console.error(err);
         document.getElementById("output").innerText = "刷新失败:\n"+err;
       }
     }
 
-    // 历史记录链接
     function viewHistory(){
       const url = `https://tronscan.org/#/contract/${CONTRACT_ADDRESS}/transactions`;
       window.open(url, "_blank");
     }
 
-    // 实时刷新：每 3 秒刷新一次
+    // 每3秒自动刷新
     setInterval(refreshAll,3000);
     refreshAll();
   </script>
