@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tron Lottery Game</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { font-family: Arial, sans-serif; margin:0; padding:0; background: #f4f4f4; }
+h2 { text-align:center; color: #333; padding: 10px 0; }
+.topbar { position: sticky; top:0; background:#e7f3fe; border-left:5px solid #2196F3; padding:10px; font-size:16px; z-index:100; }
+button { margin:5px 0; padding:12px; width:100%; font-size:16px; cursor:pointer; border:none; border-radius:5px; background:#2196F3; color:white; }
+button:disabled { background:#ccc; cursor:not-allowed; }
+#output { margin:10px; background:#fff; padding:10px; border:1px solid #ccc; max-height:calc(100vh - 180px); overflow-y:auto; }
+table { border-collapse: collapse; width:100%; min-width: 400px; }
+th, td { border:1px solid #ccc; padding:8px; text-align:left; font-size:14px; word-break: break-all; }
+th { background:#eee; }
+.link { color:#2196F3; text-decoration:underline; cursor:pointer; margin-top:10px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h2>🎲 Tron Lottery Game</h2>
+<div class="topbar" id="roundInfo">轮数：- &nbsp;&nbsp; 当前玩家数：- / 10 &nbsp;&nbsp; 剩余票数：- &nbsp;&nbsp; 奖池金额：- USDT</div>
+
+<div style="padding:0 10px;">
+<button id="buyBtn" onclick="buyTicket()">买票 (10 USDT)</button>
+<button onclick="withdrawReward()">提现奖金</button>
+<button onclick="refreshAll()">刷新玩家和奖金</button>
+<div class="link" onclick="viewHistory()">查看历史记录</div>
+</div>
+
+<div id="output">正在等待钱包连接...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
+<script>
+const CONTRACT_ADDRESS = "TMjrX4nZj1aeGnzaCwJiSFJxpKWMuwG1FZ";
+const TICKET_PRICE = 10;
+const MAX_PLAYERS = 10;
+
+let currentRound = 1;
+let contract = null;
+
+// 等待 TronWeb 钱包注入
+async function waitForTronWeb(timeout = 15000){
+  return new Promise((resolve, reject)=>{
+    const interval = 100;
+    let elapsed = 0;
+    const timer = setInterval(()=>{
+      if(window.tronWeb && window.tronWeb.ready){
+        clearInterval(timer);
+        resolve(window.tronWeb);
+      } else {
+        elapsed += interval;
+        if(elapsed >= timeout){
+          clearInterval(timer);
+          reject("TronWeb 未找到或钱包未登录，请安装 TronLink 并登录");
+        }
+      }
+    }, interval);
+  });
+}
+
+// 初始化
+async function init(){
+  try{
+    const tronWebInstance = await waitForTronWeb();
+    window.tronWeb = tronWebInstance;
+    contract = await tronWeb.contract().at(CONTRACT_ADDRESS);
+    document.getElementById('output').innerText = "钱包已连接，合约加载完成";
+    await refreshAll();
+    setInterval(refreshAll,3000);
+  } catch(err){
+    document.getElementById('output').innerText = err;
+    console.error(err);
+  }
+}
+
+// 简化地址显示
+function shortenAddress(addr){ return addr.slice(0,6)+'…'+addr.slice(-4); }
+
+// 买票
+async function buyTicket(){
+  try{
+    if(!contract){ alert("合约未加载"); return; }
+    const tx = await contract.enter().send();
+    alert("买票成功！交易ID:\n" + tx);
+    await refreshAll();
+  } catch(err){
+    console.error(err);
+    let message = "买票失败，原因未知";
+    if(err && err.data && err.data.message) message = err.data.message;
+    else if(err && err.message) message = err.message;
+    else if(err && typeof err==="string") message = err;
+
+    if(message.includes("Already entered")) message = "买票失败：你本轮已购买过票";
+    else if(message.includes("Lottery is full")) message = "买票失败：本轮人数已满，请等待下一轮";
+    else if(message.includes("transferFrom")) message = "买票失败：USDT余额不足或未授权合约";
+
+    alert(message);
+  }
+}
+
+// 提现奖金
+async function withdrawReward(){
+  try{
+    if(!contract){ alert("合约未加载"); return; }
+    const tx = await contract.withdraw().send();
+    alert("提现成功！交易ID:\n" + tx);
+    await refreshAll();
+  }catch(err){
+    console.error(err);
+    alert("提现失败，请查看控制台错误信息");
+  }
+}
+
+// 刷新玩家和奖金
+async function refreshAll(){
+  try{
+    if(!contract){ document.getElementById('output').innerText="合约未加载"; return; }
+    const players = await contract.getPlayers().call();
+    const totalCollected = players.length * TICKET_PRICE;
+    const remainingTickets = MAX_PLAYERS - players.length;
+
+    document.getElementById("roundInfo").innerHTML = 
+      `轮数：${currentRound} &nbsp;&nbsp; 当前玩家数：${players.length} / ${MAX_PLAYERS} &nbsp;&nbsp; 剩余票数：${remainingTickets} &nbsp;&nbsp; 奖池金额：${totalCollected} USDT`;
+
+    const buyBtn = document.getElementById("buyBtn");
+    if(players.length >= MAX_PLAYERS){ 
+      buyBtn.disabled = true; 
+      buyBtn.innerText = "人数已满，本轮停止买票"; 
+    } else { 
+      buyBtn.disabled=false; 
+      buyBtn.innerText = `买票 (剩余 ${remainingTickets} 张)`; 
+    }
+
+    let html="<h3>当前参与玩家和奖金</h3>";
+    if(players.length===0){ html+="<p>暂无玩家</p>"; }
+    else{
+      html+="<div style='overflow-x:auto'><table><tr><th>玩家</th><th>奖金(USDT)</th></tr>";
+      for(let i=0;i<players.length;i++){
+        const reward = await contract.winnings(players[i]).call();
+        html+=`<tr><td>${shortenAddress(players[i])}</td><td>${reward/1e6}</td></tr>`;
+      }
+      html+="</table></div>";
+    }
+    document.getElementById("output").innerHTML = html;
+
+    if(players.length >= MAX_PLAYERS){
+      currentRound++;
+    }
+
+  } catch(err){
+    console.error(err);
+    document.getElementById("output").innerText = "刷新失败:\n"+err;
+  }
+}
+
+// 查看历史
+function viewHistory(){
+  const url = `https://tronscan.org/#/contract/${CONTRACT_ADDRESS}/transactions`;
+  window.open(url,"_blank");
+}
+
+// 启动
+init();
+
+</script>
+</body>
+</html>
