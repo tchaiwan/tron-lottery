@@ -1,114 +1,132 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Tron Lottery 抽奖系统</title>
-  <style>
-    body { font-family: Arial; background: #f2f2f2; padding: 20px; }
-    .card { background: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px #ccc; max-width: 500px; margin: auto; }
-    button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
-    #status { color: green; margin-top: 10px; }
-    .error { color: red; }
-  </style>
+<meta charset="UTF-8">
+<title>Tron USDT Lottery</title>
+<script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
+<style>
+body { font-family: Arial; max-width: 600px; margin: auto; padding: 20px; }
+button { padding: 10px 20px; margin: 5px; }
+#players { margin: 10px 0; }
+.disabled { opacity: 0.5; pointer-events: none; }
+#prediction { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
+</style>
 </head>
 <body>
-  <div class="card">
-    <h2>🎟 Tron Lottery 抽奖系统</h2>
-    <p>每轮最多 10 位玩家参与，自动开奖并发放奖金。</p>
-    <p>你的地址：<span id="userAddress">未加载</span></p>
-    <p>当前轮次：<span id="round">-</span></p>
-    <p>玩家人数：<span id="playerCount">-</span></p>
-    <p>你的奖金：<span id="reward">-</span> USDT</p>
-    <button id="buy">买票 🎟</button>
-    <button id="withdraw">提现 💰</button>
-    <p id="status"></p>
-    <h3>当前玩家列表</h3>
-    <ul id="playerList"></ul>
-    <a href="https://tronscan.org/#/address/TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt" target="_blank">🔍 查看历史记录（TronScan）</a>
-  </div>
 
-  <script>
-    const contractAddress = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt";
-    const contractABI = [
-      {"inputs":[{"internalType":"address","name":"_usdt","type":"address","value":"TM2NuE9gN8kiF8Wt6WEzVyt5w4v8Y8rGG3"}],"stateMutability":"nonpayable","type":"constructor"},
-      {"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},
-      {"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-      {"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}
-    ];
+<h1>TRON USDT Lottery</h1>
 
-    let contract, userAddress;
+<p>当前轮：<span id="round">-</span></p>
+<p>你的奖金：<span id="myReward">0</span> USDT</p>
 
-    async function init() {
-      if (typeof window.tronWeb === 'undefined') {
-        document.getElementById('status').innerText = "❌ 请先安装并登录 TronLink 钱包";
+<h3>当前轮参与玩家</h3>
+<ul id="players"></ul>
+
+<button id="buyTicket">买票 (10 USDT)</button>
+<button id="withdraw">提现奖金</button>
+
+<div id="prediction">
+<h3>中奖预测</h3>
+<p>一等奖：50 USDT</p>
+<p>二等奖：30 USDT</p>
+<p>三等奖：20 USDT</p>
+<p>你当前的中奖概率：<span id="myChance">0%</span></p>
+</div>
+
+<p><a href="https://tronscan.org/#/contracts/TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt/transactions" target="_blank">查询历史记录</a></p>
+
+<script>
+const contractAddress = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt"; // 合约地址
+const abi = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+
+let contract;
+let userAddress;
+
+async function init() {
+    if (!window.tronWeb || !tronWeb.ready) {
+        alert("请安装并登录 TronLink 钱包");
         return;
-      }
-
-      // 等待 TronWeb 完成初始化
-      await new Promise(r => setTimeout(r, 2000));
-
-      userAddress = tronWeb.defaultAddress.base58;
-      document.getElementById('userAddress').innerText = userAddress;
-
-      contract = await tronWeb.contract(contractABI, contractAddress);
-      document.getElementById('status').innerText = "✅ 合约已加载";
-
-      refresh();
-      setInterval(refresh, 5000); // 每5秒刷新
     }
 
-    async function refresh() {
-      try {
+    userAddress = tronWeb.defaultAddress.base58;
+    contract = await tronWeb.contract(abi, contractAddress);
+
+    refresh();
+    setInterval(refresh, 5000);
+
+    document.getElementById("buyTicket").onclick = buyTicket;
+    document.getElementById("withdraw").onclick = withdrawReward;
+}
+
+async function refresh() {
+    try {
         const players = await contract.getPlayers().call();
         const round = await contract.round().call();
         const reward = await contract.rewards(userAddress).call();
-        const listEl = document.getElementById('playerList');
-        listEl.innerHTML = "";
-        players.forEach(p => {
-          const li = document.createElement('li');
-          li.innerText = p;
-          listEl.appendChild(li);
+
+        document.getElementById("round").innerText = round;
+        document.getElementById("myReward").innerText = tronWeb.fromSun(reward);
+
+        const playersList = document.getElementById("players");
+        playersList.innerHTML = "";
+        let alreadyBought = false;
+        players.forEach(addr => {
+            const li = document.createElement("li");
+            li.textContent = addr;
+            playersList.appendChild(li);
+            if (addr === userAddress) alreadyBought = true;
         });
-        document.getElementById('playerCount').innerText = players.length;
-        document.getElementById('round').innerText = round.toString();
-        document.getElementById('reward').innerText = tronWeb.fromSun(reward.toString());
-      } catch (e) {
-        console.error("刷新失败", e);
-      }
+
+        // 买票按钮状态
+        const buyBtn = document.getElementById("buyTicket");
+        if (alreadyBought || players.length >= 5) {
+            buyBtn.classList.add("disabled");
+            buyBtn.innerText = "已买票 / 本轮满员";
+        } else {
+            buyBtn.classList.remove("disabled");
+            buyBtn.innerText = "买票 (10 USDT)";
+        }
+
+        // 计算理论中奖概率
+        const remainingSpots = 5 - players.length + (alreadyBought ? 0 : 1);
+        let chance = 0;
+        if (!alreadyBought) {
+            // 假设你买票后满员即可开奖
+            chance = Math.min(3 / 5 * 100, 100);
+        } else {
+            chance = players.length > 0 ? Math.min(3 / players.length * 100, 100) : 0;
+        }
+        document.getElementById("myChance").innerText = chance.toFixed(1) + "%";
+
+    } catch (err) {
+        console.error(err);
     }
+}
 
-    document.getElementById('buy').onclick = async () => {
-      try {
-        document.getElementById('status').innerText = "⏳ 交易中...";
-        const tx = await contract.buyTicket().send();
-        document.getElementById('status').innerText = "✅ 买票成功！交易哈希：" + tx;
+async function buyTicket() {
+    try {
+        await contract.buyTicket().send({ shouldPollResponse: true });
+        alert("买票成功！");
         refresh();
-      } catch (e) {
-        console.error(e);
-        document.getElementById('status').innerText = "❌ 买票失败：" + e.message;
-      }
-    };
+    } catch (err) {
+        console.error(err);
+        alert("买票失败：" + (err.message || err));
+    }
+}
 
-    document.getElementById('withdraw').onclick = async () => {
-      try {
-        document.getElementById('status').innerText = "⏳ 提现中...";
-        const tx = await contract.withdrawReward().send();
-        document.getElementById('status').innerText = "✅ 提现成功！交易哈希：" + tx;
+async function withdrawReward() {
+    try {
+        await contract.withdrawReward().send({ shouldPollResponse: true });
+        alert("提现成功！");
         refresh();
-      } catch (e) {
-        console.error(e);
-        document.getElementById('status').innerText = "❌ 提现失败：" + e.message;
-      }
-    };
+    } catch (err) {
+        console.error(err);
+        alert("提现失败：" + (err.message || err));
+    }
+}
 
-    window.onload = init;
-  </script>
+init();
+</script>
+
 </body>
 </html>
