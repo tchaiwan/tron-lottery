@@ -30,7 +30,7 @@
 <script>
 let tronWeb;
 let walletAddress;
-const TRON_LOTTERY_ADDRESS = "你的TronLottery合约地址"; // 替换为你的合约地址
+const TRON_LOTTERY_ADDRESS = "TGAMQ6XhdsE7v1A9rAbsQSNQAmYDUnMPWh"; // 已替换为你的主网合约地址
 const USDT_ADDRESS = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"; // 主网USDT
 const LOTTERY_ABI = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
@@ -69,8 +69,8 @@ async function buyTicket() {
   try{
     if(!walletAddress) { log("钱包未连接"); return; }
 
-    const allowance = await usdtContract.allowance(walletAddress, TRON_LOTTERY_ADDRESS).call();
     const ticketPrice = await lotteryContract.ticketPrice().call();
+    const allowance = await usdtContract.allowance(walletAddress, TRON_LOTTERY_ADDRESS).call();
 
     if(Number(allowance) < Number(ticketPrice)){
       log("授权 USDT...");
@@ -89,6 +89,7 @@ async function buyTicket() {
 
 async function withdrawReward() {
   try{
+    log("提现中...");
     await lotteryContract.withdrawReward().send();
     log("提现成功");
   } catch(e){
