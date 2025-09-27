@@ -3,99 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <title>Tron USDT Lottery</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tronweb/2.19.0/tronweb.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
 </head>
 <body>
-<h1>Tron USDT Lottery</h1>
-<p>当前轮次: <span id="round">-</span></p>
-<p>当前玩家数: <span id="playerCount">-</span></p>
-<button id="connectBtn">连接钱包</button>
-<button id="buyBtn" disabled>买票 10 USDT</button>
-<button id="refreshBtn">刷新玩家列表</button>
-
-<div id="status"></div>
+<h2>Tron USDT Lottery</h2>
+<div id="status">状态: 未连接</div>
+<button id="connectWallet">连接 TronLink 钱包</button>
+<hr>
+<div>
+    <button id="approveBtn">授权合约使用 USDT</button>
+    <button id="buyTicketBtn">买票 10 USDT</button>
+    <button id="withdrawBtn">提现奖金</button>
+</div>
+<div>
+    <h3>当前玩家列表:</h3>
+    <ul id="playersList"></ul>
+</div>
+<div id="logs"></div>
 
 <script>
-const contractAddress = "TGAMQ6XhdsE7v1A9rAbsQSNQAmYDUnMPWh"; // 主网合约地址
-const tronLinkCheckInterval = 500; // ms
-let contract;
-let tronWebInstance;
-let usdtAddress; // 在部署合约时填写的USDT地址
-let ticketPrice = 10_000_000; // 10 USDT (6位小数)
+const contractAddress = "TGAMQ6XhdsE7v1A9rAbsQSNQAmYDUnMPWh"; // 你的合约地址
+const usdtAddress = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"; // TRC20 USDT 主网地址
 
-// 合约 ABI
-const contractABI = [ /* 你提供的 TronLottery ABI 放这里 */ ];
+const lotteryABI = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
-async function initTronWeb() {
+const usdtABI = [{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transfer","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"recipient","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"transferFrom","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"}];
+
+let tronWeb;
+let lotteryContract;
+let usdtContract;
+
+async function log(msg) {
+    const logs = document.getElementById("logs");
+    logs.innerHTML += `<div>${msg}</div>`;
+}
+
+async function connectWallet() {
     if (window.tronWeb && window.tronWeb.ready) {
-        tronWebInstance = window.tronWeb;
-        document.getElementById("status").innerText = "TronLink 已连接";
-        contract = await tronWebInstance.contract(contractABI, contractAddress);
-        document.getElementById("buyBtn").disabled = false;
-        loadPlayers();
+        tronWeb = window.tronWeb;
+        document.getElementById("status").innerText = "状态: 已连接 " + tronWeb.defaultAddress.base58;
+        lotteryContract = await tronWeb.contract(lotteryABI, contractAddress);
+        usdtContract = await tronWeb.contract(usdtABI, usdtAddress);
+        log("合约已加载");
+        refreshPlayers();
     } else {
-        document.getElementById("status").innerText = "请安装 TronLink 或切换到主网";
-        setTimeout(initTronWeb, tronLinkCheckInterval);
+        alert("请先安装 TronLink 钱包并登录");
     }
 }
 
-// 连接钱包按钮
-document.getElementById("connectBtn").onclick = async () => {
-    if (!window.tronWeb) {
-        alert("请安装 TronLink");
-        return;
-    }
-    await initTronWeb();
-};
-
-// 检查 USDT 授权
-async function checkAllowance() {
-    const usdtABI = [{"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"}];
-    const usdt = await tronWebInstance.contract(usdtABI, await contract.usdt().call());
-    const allowance = await usdt.allowance(tronWebInstance.defaultAddress.base58, contractAddress).call();
-    return { usdt, allowance };
-}
-
-// 买票
-document.getElementById("buyBtn").onclick = async () => {
-    const statusDiv = document.getElementById("status");
-    statusDiv.innerText = "检查 USDT 授权中...";
+async function approveUSDT() {
     try {
-        const { usdt, allowance } = await checkAllowance();
-        if (allowance < ticketPrice) {
-            statusDiv.innerText = "USDT 授权不足，正在授权...";
-            const tx = await usdt.approve(contractAddress, ticketPrice).send();
-            statusDiv.innerText = "授权成功，等待确认: " + tx;
-            await new Promise(r => setTimeout(r, 5000)); // 简单等待链上确认
-        }
-
-        statusDiv.innerText = "发送买票交易...";
-        const txBuy = await contract.buyTicket().send({ from: tronWebInstance.defaultAddress.base58 });
-        statusDiv.innerText = "买票成功！交易哈希: " + txBuy;
-        loadPlayers();
+        const amount = tronWeb.toSun(1000); // 授权1000 USDT，足够多轮使用
+        const tx = await usdtContract.approve(contractAddress, amount).send();
+        log("USDT 授权成功，交易哈希：" + tx);
     } catch (err) {
-        console.error(err);
-        statusDiv.innerText = "买票失败: " + err.message;
-    }
-};
-
-// 刷新玩家列表
-async function loadPlayers() {
-    try {
-        const players = await contract.getPlayers().call();
-        document.getElementById("playerCount").innerText = players.length;
-        const round = await contract.round().call();
-        document.getElementById("round").innerText = round;
-    } catch (err) {
-        console.error(err);
-        document.getElementById("status").innerText = "刷新玩家列表失败: " + err.message;
+        log("授权失败: " + err);
     }
 }
 
-document.getElementById("refreshBtn").onclick = loadPlayers;
+async function buyTicket() {
+    try {
+        const tx = await lotteryContract.buyTicket().send({feeLimit: 100_000_000});
+        log("买票成功，交易哈希：" + tx);
+        refreshPlayers();
+    } catch (err) {
+        log("买票失败: " + err);
+    }
+}
 
-// 页面初始化
-initTronWeb();
+async function withdrawReward() {
+    try {
+        const tx = await lotteryContract.withdrawReward().send({feeLimit: 100_000_000});
+        log("提现成功，交易哈希：" + tx);
+    } catch (err) {
+        log("提现失败: " + err);
+    }
+}
+
+async function refreshPlayers() {
+    try {
+        const players = await lotteryContract.getPlayers().call();
+        const ul = document.getElementById("playersList");
+        ul.innerHTML = "";
+        players.forEach(p => {
+            const li = document.createElement("li");
+            li.innerText = p;
+            ul.appendChild(li);
+        });
+        log("玩家列表已刷新");
+    } catch (err) {
+        log("刷新玩家列表失败: " + err);
+    }
+}
+
+document.getElementById("connectWallet").onclick = connectWallet;
+document.getElementById("approveBtn").onclick = approveUSDT;
+document.getElementById("buyTicketBtn").onclick = buyTicket;
+document.getElementById("withdrawBtn").onclick = withdrawReward;
+
+// 自动每10秒刷新玩家列表
+setInterval(refreshPlayers, 10000);
 </script>
 </body>
 </html>
