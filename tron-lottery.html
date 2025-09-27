@@ -7,7 +7,7 @@
 body { font-family: Arial, sans-serif; padding: 20px; }
 button { padding: 10px 20px; margin: 5px; cursor: pointer; }
 #players { margin-top: 10px; }
-#status { margin-top: 10px; color: blue; }
+#status { margin-top: 10px; color: blue; white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -36,8 +36,8 @@ let tronWeb, contract, userAddress;
 
 function updateStatus(msg, isError=false) {
     const statusDiv = document.getElementById("status");
-    statusDiv.innerText = msg;
-    statusDiv.style.color = isError ? "red" : "blue";
+    const prefix = isError ? "❌ 错误: " : "✅ ";
+    statusDiv.innerText += prefix + msg + "\n";
 }
 
 // 初始化 TronWeb
@@ -59,7 +59,6 @@ async function initTronWeb() {
                 refreshPlayers();
                 setInterval(refreshPlayers, 5000);
             } catch (err) {
-                console.error(err);
                 updateStatus("合约加载失败: " + err.message, true);
             }
         }
@@ -78,7 +77,6 @@ async function approveUSDT(amount) {
         updateStatus("授权成功！");
         return true;
     } catch (err) {
-        console.error(err);
         updateStatus("USDT 授权失败: " + err.message, true);
         return false;
     }
@@ -96,7 +94,6 @@ async function buyTicket() {
         updateStatus("买票成功！");
         refreshPlayers();
     } catch (err) {
-        console.error(err);
         updateStatus("买票失败: " + err.message, true);
     }
 }
@@ -109,7 +106,6 @@ async function withdrawReward() {
         updateStatus("提现成功！");
         refreshPlayers();
     } catch (err) {
-        console.error(err);
         updateStatus("提现失败: " + err.message, true);
     }
 }
@@ -126,7 +122,6 @@ async function refreshPlayers() {
             ul.appendChild(li);
         }
     } catch (err) {
-        console.error(err);
         updateStatus("刷新玩家列表失败: " + err.message, true);
     }
 }
