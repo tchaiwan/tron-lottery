@@ -36,8 +36,14 @@ button { padding: 10px 20px; margin: 5px; }
 <p><a href="https://tronscan.org/#/contracts/TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt/transactions" target="_blank">查询历史记录</a></p>
 
 <script>
-const contractAddress = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt"; // 合约地址
-const abi = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+// 配置
+const contractAddress = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt"; // 你的 TronLottery 合约地址
+const USDT_ADDRESS = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"; // 主网 USDT
+const USDT_ABI = [
+    { "constant": true, "inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}], "name":"allowance","outputs":[{"name":"","type":"uint256"}], "type":"function" },
+    { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve","outputs":[{"name":"","type":"bool"}], "type":"function" }
+];
+const LOTTERY_ABI = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
 
 let contract;
 let userAddress;
@@ -49,8 +55,7 @@ async function init() {
     }
 
     userAddress = tronWeb.defaultAddress.base58;
-    contract = await tronWeb.contract(abi, contractAddress);
-
+    contract = await tronWeb.contract(LOTTERY_ABI, contractAddress);
     refresh();
     setInterval(refresh, 5000);
 
@@ -77,7 +82,6 @@ async function refresh() {
             if (addr === userAddress) alreadyBought = true;
         });
 
-        // 买票按钮状态
         const buyBtn = document.getElementById("buyTicket");
         if (alreadyBought || players.length >= 5) {
             buyBtn.classList.add("disabled");
@@ -87,15 +91,8 @@ async function refresh() {
             buyBtn.innerText = "买票 (10 USDT)";
         }
 
-        // 计算理论中奖概率
-        const remainingSpots = 5 - players.length + (alreadyBought ? 0 : 1);
-        let chance = 0;
-        if (!alreadyBought) {
-            // 假设你买票后满员即可开奖
-            chance = Math.min(3 / 5 * 100, 100);
-        } else {
-            chance = players.length > 0 ? Math.min(3 / players.length * 100, 100) : 0;
-        }
+        // 中奖概率预测
+        let chance = alreadyBought ? (3 / players.length * 100) : (3 / (players.length + 1) * 100);
         document.getElementById("myChance").innerText = chance.toFixed(1) + "%";
 
     } catch (err) {
@@ -105,6 +102,16 @@ async function refresh() {
 
 async function buyTicket() {
     try {
+        const usdt = await tronWeb.contract(USDT_ABI, USDT_ADDRESS);
+        const allowance = await usdt.allowance(userAddress, contractAddress).call();
+        const ticketPriceSun = 10 * 1e6; // 10 USDT
+
+        if (parseInt(allowance) < ticketPriceSun) {
+            await usdt.approve(contractAddress, ticketPriceSun).send({ shouldPollResponse: true });
+            alert("已授权合约使用你的USDT，请再次点击买票完成扣款");
+            return;
+        }
+
         await contract.buyTicket().send({ shouldPollResponse: true });
         alert("买票成功！");
         refresh();
