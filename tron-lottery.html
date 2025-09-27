@@ -27,9 +27,10 @@ button { padding: 10px 20px; margin: 5px; cursor: pointer; }
 
 <script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
 <script>
-// 合约地址和 ABI
+// 填写你的合约地址和 USDT 地址
 const CONTRACT_ADDRESS = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt";
-const CONTRACT_ABI = [/* 这里填你的合约 ABI */];
+const USDT_ADDRESS = "TM2NuE9gN8kiF8Wt6WEzVyt5w4v8Y8rGG3"; // TRC20 USDT
+const CONTRACT_ABI = [ /* 这里填你的合约 ABI */ ];
 
 let tronWeb, contract, userAddress;
 
@@ -39,7 +40,7 @@ function updateStatus(msg, isError=false) {
     statusDiv.style.color = isError ? "red" : "blue";
 }
 
-// 初始化 TronWeb 并加载合约
+// 初始化 TronWeb
 async function initTronWeb() {
     updateStatus("检测 TronLink 钱包中...");
     const detectInterval = setInterval(async () => {
@@ -61,14 +62,34 @@ async function initTronWeb() {
                 console.error(err);
                 updateStatus("合约加载失败: " + err.message, true);
             }
-        } else {
-            updateStatus("请安装 TronLink 或登录钱包，并刷新页面");
         }
     }, 1000);
 }
 
+// 自动授权 TRC20 USDT
+async function approveUSDT(amount) {
+    try {
+        const usdtContract = await tronWeb.contract().at(USDT_ADDRESS);
+        const allowance = await usdtContract.allowance(userAddress, CONTRACT_ADDRESS).call();
+        if (parseInt(allowance) >= amount) return true;
+
+        updateStatus("正在授权 USDT，请在 TronLink 确认...");
+        await usdtContract.approve(CONTRACT_ADDRESS, amount).send({from: userAddress});
+        updateStatus("授权成功！");
+        return true;
+    } catch (err) {
+        console.error(err);
+        updateStatus("USDT 授权失败: " + err.message, true);
+        return false;
+    }
+}
+
 // 买票
 async function buyTicket() {
+    const ticketPrice = 10 * 1e6;
+    const approved = await approveUSDT(ticketPrice);
+    if (!approved) return;
+
     updateStatus("正在买票，请在 TronLink 确认交易...");
     try {
         await contract.buyTicket().send({from: userAddress});
