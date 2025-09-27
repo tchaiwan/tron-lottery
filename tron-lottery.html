@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
 <meta charset="UTF-8">
 <title>Tron USDT Lottery</title>
@@ -27,8 +27,9 @@ button { padding: 10px 20px; margin: 5px; cursor: pointer; }
 
 <script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
 <script>
+// 合约地址和 ABI
 const CONTRACT_ADDRESS = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt";
-const CONTRACT_ABI = [/* 你的 ABI */];
+const CONTRACT_ABI = [/* 这里填你的合约 ABI */];
 
 let tronWeb, contract, userAddress;
 
@@ -38,60 +39,39 @@ function updateStatus(msg, isError=false) {
     statusDiv.style.color = isError ? "red" : "blue";
 }
 
-// 初始化 TronWeb 并连接合约
+// 初始化 TronWeb 并加载合约
 async function initTronWeb() {
-    updateStatus("正在检测 TronLink 钱包...");
+    updateStatus("检测 TronLink 钱包中...");
     const detectInterval = setInterval(async () => {
         if (window.tronWeb && window.tronWeb.ready) {
             clearInterval(detectInterval);
             tronWeb = window.tronWeb;
             userAddress = tronWeb.defaultAddress.base58;
             updateStatus("钱包已连接: " + userAddress);
+
             document.getElementById("buyTicket").disabled = false;
             document.getElementById("withdrawReward").disabled = false;
 
             try {
                 contract = await tronWeb.contract(CONTRACT_ABI, CONTRACT_ADDRESS);
-                updateStatus("合约加载成功，钱包地址: " + userAddress);
+                updateStatus("合约加载成功: " + CONTRACT_ADDRESS);
                 refreshPlayers();
                 setInterval(refreshPlayers, 5000);
             } catch (err) {
                 console.error(err);
                 updateStatus("合约加载失败: " + err.message, true);
             }
+        } else {
+            updateStatus("请安装 TronLink 或登录钱包，并刷新页面");
         }
     }, 1000);
 }
 
-// 检查并授权 USDT
-async function ensureAllowance() {
-    try {
-        const usdtAddress = await contract.usdt().call();
-        const usdtContract = await tronWeb.contract([
-            { "constant":true,"inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},
-            { "constant":false,"inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"}
-        ], usdtAddress);
-
-        const allowance = await usdtContract.allowance(userAddress, CONTRACT_ADDRESS).call();
-        const ticketPrice = await contract.ticketPrice().call();
-        if (parseInt(allowance) < parseInt(ticketPrice)) {
-            updateStatus("授权 USDT 给合约中，请在 TronLink 确认...");
-            await usdtContract.approve(CONTRACT_ADDRESS, ticketPrice).send();
-            updateStatus("USDT 授权成功");
-        }
-    } catch (err) {
-        console.error(err);
-        updateStatus("检查授权失败: " + err.message, true);
-        throw err;
-    }
-}
-
 // 买票
 async function buyTicket() {
-    updateStatus("正在买票，请确认 TronLink 交易...");
+    updateStatus("正在买票，请在 TronLink 确认交易...");
     try {
-        await ensureAllowance();
-        await contract.buyTicket().send({ from: userAddress });
+        await contract.buyTicket().send({from: userAddress});
         updateStatus("买票成功！");
         refreshPlayers();
     } catch (err) {
@@ -102,9 +82,9 @@ async function buyTicket() {
 
 // 提现奖励
 async function withdrawReward() {
-    updateStatus("正在提现，请确认 TronLink 交易...");
+    updateStatus("正在提现，请在 TronLink 确认交易...");
     try {
-        await contract.withdrawReward().send({ from: userAddress });
+        await contract.withdrawReward().send({from: userAddress});
         updateStatus("提现成功！");
         refreshPlayers();
     } catch (err) {
