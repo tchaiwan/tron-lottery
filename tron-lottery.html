@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>TronLottery</title>
+<title>Tron USDT Lottery</title>
 <style>
 body { font-family: Arial, sans-serif; padding: 20px; }
 button { padding: 10px 20px; margin: 5px; cursor: pointer; }
@@ -28,43 +28,43 @@ button { padding: 10px 20px; margin: 5px; cursor: pointer; }
 <script src="https://cdn.jsdelivr.net/npm/tronweb/dist/TronWeb.js"></script>
 <script>
 const CONTRACT_ADDRESS = "TAUUHuWB3bk4BN7otRurVmuXhjpGgbmKvt";
-const CONTRACT_ABI = [{"inputs":[{"internalType":"address","name":"_usdt","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[],"name":"buyTicket","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getPlayers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"maxPlayers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"players","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"rewards","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"round","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"ticketPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"usdt","outputs":[{"internalType":"contract ITRC20","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"withdrawReward","outputs":[],"stateMutability":"nonpayable","type":"function"}];
+const CONTRACT_ABI = [/* 你的 ABI */];
 
 let tronWeb, contract, userAddress;
 
-// 更新状态提示
-function updateStatus(msg, isError = false) {
+function updateStatus(msg, isError=false) {
     const statusDiv = document.getElementById("status");
     statusDiv.innerText = msg;
     statusDiv.style.color = isError ? "red" : "blue";
 }
 
-// 初始化 TronWeb 和合约
-async function init() {
-    updateStatus("正在初始化 TronWeb...");
-    if (window.tronWeb && tronWeb.ready) {
-        tronWeb = window.tronWeb;
-        userAddress = tronWeb.defaultAddress.base58;
-        try {
-            contract = await tronWeb.contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+// 初始化 TronWeb 并连接合约
+async function initTronWeb() {
+    updateStatus("正在检测 TronLink 钱包...");
+    const detectInterval = setInterval(async () => {
+        if (window.tronWeb && window.tronWeb.ready) {
+            clearInterval(detectInterval);
+            tronWeb = window.tronWeb;
+            userAddress = tronWeb.defaultAddress.base58;
             updateStatus("钱包已连接: " + userAddress);
             document.getElementById("buyTicket").disabled = false;
             document.getElementById("withdrawReward").disabled = false;
-            refreshPlayers();
-            setInterval(refreshPlayers, 5000);
-        } catch (err) {
-            console.error(err);
-            updateStatus("合约加载失败: " + err.message, true);
+
+            try {
+                contract = await tronWeb.contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+                updateStatus("合约加载成功，钱包地址: " + userAddress);
+                refreshPlayers();
+                setInterval(refreshPlayers, 5000);
+            } catch (err) {
+                console.error(err);
+                updateStatus("合约加载失败: " + err.message, true);
+            }
         }
-    } else {
-        updateStatus("请安装并登录 TronLink 钱包，并切换到正确网络", true);
-        setTimeout(init, 1000);
-    }
+    }, 1000);
 }
 
 // 检查并授权 USDT
 async function ensureAllowance() {
-    updateStatus("检查 USDT 授权中...");
     try {
         const usdtAddress = await contract.usdt().call();
         const usdtContract = await tronWeb.contract([
@@ -78,8 +78,6 @@ async function ensureAllowance() {
             updateStatus("授权 USDT 给合约中，请在 TronLink 确认...");
             await usdtContract.approve(CONTRACT_ADDRESS, ticketPrice).send();
             updateStatus("USDT 授权成功");
-        } else {
-            updateStatus("USDT 授权充足");
         }
     } catch (err) {
         console.error(err);
@@ -132,7 +130,7 @@ async function refreshPlayers() {
     }
 }
 
-document.getElementById("connectWallet").onclick = init;
+document.getElementById("connectWallet").onclick = initTronWeb;
 document.getElementById("buyTicket").onclick = buyTicket;
 document.getElementById("withdrawReward").onclick = withdrawReward;
 </script>
